@@ -1,4 +1,7 @@
-profile = janestreet
-version = 0.27.0
+profile = default
+version = 0.28.1
 space-around-lists=false
 space-around-arrays=false
+margin=75
+let-binding-indent=4
+max-indent=4
