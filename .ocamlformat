@@ -5,3 +5,6 @@ space-around-arrays=false
 margin=75
 let-binding-indent=4
 max-indent=4
+match-indent=4
+module-indent=4
+function-indent=4
