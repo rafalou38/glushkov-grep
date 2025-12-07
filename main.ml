@@ -24,8 +24,6 @@ type regexp =
     q0: liste
     T: liste
     Delta: etat, lettre -> etat
-    
-  
   *)
 type afnd = {
   initiaux : char list;
@@ -78,7 +76,7 @@ let r2 = parse_regexp "ab&|de|.|"
 (* ab*|ca* *)
 
 let r3 = parse_regexp "ab*.ca*.|"
-
+let r4 = parse_regexp (Parser.parse "ab*|ca*")
 (*fct de transition de l'automate *)
 (*fct qui linéarise l'expression, il faudra garder 
 les associations qq part en memoire *)
@@ -174,10 +172,9 @@ let calcul_prefixe (exp : regexp) =
             aux b
         | Concat (a, b) ->
             if est_vide b then ()
-            else if contient_mot_vide a then begin
+            else if contient_mot_vide a then (
               aux a;
-              aux b
-            end
+              aux b)
             else aux a
     in
     aux exp;
@@ -196,10 +193,9 @@ let calcul_suffixe (exp : regexp) =
             aux b
         | Concat (a, b) ->
             if est_vide a then ()
-            else if contient_mot_vide b then begin
+            else if contient_mot_vide b then (
               aux a;
-              aux b
-            end
+              aux b)
             else aux b
         (* Si b=& ou si b = Etoile alors aux a *)
     in

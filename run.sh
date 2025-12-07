@@ -1,5 +1,6 @@
 set -xe
 
-ocamlc ./main.ml -o grep
+ocamlc ./parser.ml
+ocamlc ./parser.cmo ./main.ml -o grep
 
 ./grep "$@" | less
