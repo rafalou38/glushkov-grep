@@ -31,7 +31,7 @@ let is_right_assoc = function StarToken -> true | _ -> false
 let token_to_string = function
     | CharToken c -> String.make 1 c
     | StarToken -> "*"
-    | ConcatToken -> "."
+    | ConcatToken -> "@"
     | OrToken -> "|"
     | LToken | RToken -> "" (* should not appear in final RPN *)
 

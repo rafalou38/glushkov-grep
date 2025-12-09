@@ -1,14 +1,3 @@
-let process_line line = Printf.printf "%s\n%!" line
-
-(* Lecture de l'entrée, ligne par ligne *)
-let process input =
-    try
-      while true do
-        let line = Stdlib.input_line input in
-        process_line line
-      done
-    with End_of_file -> ()
-
 type regexp =
   | Vide
   | Epsilon
@@ -31,12 +20,37 @@ type afnd = {
   delta : (char * char, char) Hashtbl.t;
 }
 
+(* qs liste d'états; c caractère -> lister d'états *)
 let delta_chap (a : afnd) (qs : char list) (c : char) =
-    List.fold_left (fun acc q -> Hashtbl.find a.delta (q, c) :: acc) [] qs
+    List.fold_left (fun acc q -> 
+        let res = Hashtbl.find_opt a.delta (q, c) in
+        match res with
+            | Some e -> e::acc
+            | None -> acc
+     ) [] qs
+
+let rec delta_chap_et (a: afnd) (qs : char list) (m : char list) = 
+    match m with
+        | []-> qs
+        | c::l -> delta_chap_et a (delta_chap a qs c) l
+
+let match_mot (a:afnd) (mot:string) = 
+    let fin = delta_chap_et a a.initiaux (List.of_seq (String.to_seq mot))
+    (* fin *)
+    in
+    (* Verifie que l'ensemble final est inclus dans T *)
+    fin <> [] && List.for_all (fun q -> List.mem q a.terminaux) fin
+
 
 let parse_regexp (s : string) : regexp =
     let stack = Stack.create () in
     let n = String.length s in
+    let point = ref ( Lettre (char_of_int 98)) in
+    (* a-z = 98-122 *)
+    for i = 99 to 105 do
+        point := Ou(!point, Lettre (char_of_int i))
+    done;
+
     for i = 0 to n - 1 do
       let c = s.[i] in
 
@@ -47,12 +61,13 @@ let parse_regexp (s : string) : regexp =
           match (ass, bss) with
           | Some a, Some b -> Stack.push (Ou (b, a)) stack
           | _ -> failwith "erreur dans la regex (|)")
-      | '.' -> (
+      | '@' -> (
           let ass = Stack.pop_opt stack in
           let bss = Stack.pop_opt stack in
           match (ass, bss) with
           | Some a, Some b -> Stack.push (Concat (b, a)) stack
-          | _ -> failwith "erreur dans la regex (.)")
+          | _ -> failwith "erreur dans la regex (@)")
+      | '.' -> (Stack.push !point stack)
       | '*' -> (
           let ass = Stack.pop_opt stack in
           match ass with
@@ -70,12 +85,12 @@ let r1 =
       ( Concat (Lettre 'a', Ou (Lettre 'b', Epsilon)),
         Ou (Lettre 'd', Lettre 'e') )
 
-let r2 = parse_regexp "ab&|de|.|"
+let r2 = parse_regexp "ab&|de|@|"
 (* ((b|&)(d|e))|a *)
 
 (* ab*|ca* *)
 
-let r3 = parse_regexp "ab*.ca*.|"
+let r3 = parse_regexp "ab*@ca*@|"
 let r4 = parse_regexp (Parser.parse "ab*|ca*")
 (*fct de transition de l'automate *)
 (*fct qui linéarise l'expression, il faudra garder 
@@ -232,7 +247,35 @@ let calcul_facteurs (exp : regexp) =
               pre
     in
     aux exp;
-    fact
+    !fact
+
+let const_automate (exp:regexp) = 
+    let e_linearise = linearise exp in
+    let n = List.length e_linearise in
+    let e_lin = Array.make n ' ' in
+    let rec liste_to_tab l = match l with
+        |[] -> ()
+        |(ind,lettre)::suite -> e_lin.(int_of_char ind) <- lettre;
+                                liste_to_tab suite
+    in liste_to_tab e_linearise; 
+    let e = constr_lineaire e_linearise exp in
+    let fact = calcul_facteurs e in
+    let pre = calcul_prefixe e in
+    let suf = calcul_suffixe e in
+    let mot_vide_terminal = ref [] in
+    if contient_mot_vide exp then begin
+        mot_vide_terminal := ['e'] end;
+    let auto = {initiaux = ['e'];
+                terminaux = (!mot_vide_terminal)@suf;
+                delta = Hashtbl.create 1}
+    in
+    List.iter (fun (q0,q1) -> let carac = e_lin.(int_of_char q1) in 
+        Hashtbl.replace auto.delta (q0,carac) q1) fact;
+    List.iter (fun q -> let carac = e_lin.(int_of_char q) in
+        Hashtbl.replace auto.delta ('e',carac) q) pre;
+    auto
+
+    
 
 let main () =
     (* Vérifie que l'expression régulière est bien présente en premier
@@ -251,7 +294,35 @@ let main () =
     Printf.printf "* Regexp you entered is '%s'\n* Reading from %s\n\n%!"
       regex_str
       (if argc = 3 then Sys.argv.(2) else "stdin");
-    process input_buffer;
+
+    let r = parse_regexp (Parser.parse regex_str) in
+    let a = const_automate r in
+    try
+      while true do
+        let line = Stdlib.input_line input_buffer in
+        if match_mot a line then
+         (Printf.printf "[x] %s\n" line)
+          else 
+         (Printf.printf "[ ] %s\n" line)
+      done
+    with End_of_file -> ();
+
     if argc = 3 then Stdlib.close_in input_buffer
 
 let () = main ()
+
+let dump_aut (a: afnd) = 
+    let s = Hashtbl.to_seq a.delta in 
+    Printf.printf("Digraph{\n");
+    List.iter (fun q -> Printf.printf "%d [shape=box];" (int_of_char q)) a.initiaux;
+    List.iter (fun q -> Printf.printf "%d [shape=doublecircle];" (int_of_char q)) a.terminaux;
+    Seq.iter (function (q1,c), q2 -> Printf.printf "%d->%d[label=\"%c\"];\n" (int_of_char q1) (int_of_char q2) c) s;
+    Printf.printf("}\n")
+
+(* let r = parse_regexp (Parser.parse "(a|b)*a")
+let a = const_automate r;;
+
+(* match_mot a "to" *)
+
+print_string (Parser.parse ".*a")
+dump_aut a *)
