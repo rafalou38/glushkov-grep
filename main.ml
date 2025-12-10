@@ -107,7 +107,8 @@ les associations qq part en memoire *)
 let linearise (regex : regexp) =
     let liste_lettres = ref [] in
     (* liste de couples indice lettre *)
-    let i = ref 0 in
+    (* On commence à 1 pour réserver 0 pour l'état initial *)
+    let i = ref 1 in
     let rec aux r =
         match r with
         | Vide -> ()
@@ -261,7 +262,8 @@ let calcul_facteurs (exp : regexp) =
 let const_automate (exp:regexp) = 
     let e_linearise = linearise exp in
     let n = List.length e_linearise in
-    let e_lin = Array.make n ' ' in
+    (* indices de 1 à n + EI *)
+    let e_lin = Array.make (n + 1) ' ' in
     let rec liste_to_tab l = match l with
         |[] -> ()
         |(ind,lettre)::suite -> e_lin.(int_of_char ind) <- lettre;
@@ -271,11 +273,12 @@ let const_automate (exp:regexp) =
     let fact = calcul_facteurs e in
     let pre = calcul_prefixe e in
     let suf = calcul_suffixe e in
+    let etat_initial = '\000' in
     let mot_vide_terminal = ref [] in
     (* List.iter (function a,b -> Printf.printf "%d-%d " (int_of_char a) (int_of_char b)) fact; *)
     if contient_mot_vide exp then begin
-        mot_vide_terminal := ['e'] end;
-    let auto = {initiaux = ['e'];
+        mot_vide_terminal := [etat_initial] end;
+    let auto = {initiaux = [etat_initial];
                 terminaux = (!mot_vide_terminal)@suf;
                 delta = Hashtbl.create 1}
     in
@@ -288,7 +291,7 @@ let const_automate (exp:regexp) =
         
     )) fact;
     List.iter (fun q -> let carac = e_lin.(int_of_char q) in
-        Hashtbl.add auto.delta ('e',carac) q) pre;
+        Hashtbl.add auto.delta (etat_initial,carac) q) pre;
     auto
 
     
