@@ -23,10 +23,10 @@ type afnd = {
 (* qs liste d'états; c caractère -> lister d'états *)
 let delta_chap (a : afnd) (qs : char list) (c : char) =
     List.fold_left (fun acc q -> 
-        let res = Hashtbl.find_opt a.delta (q, c) in
-        match res with
+        let res = Hashtbl.find_all a.delta (q, c) in res@acc
+        (* match res with
             | Some e -> e::acc
-            | None -> acc
+            | None -> acc *)
      ) [] qs
 
 let rec delta_chap_et (a: afnd) (qs : char list) (m : char list) = 
@@ -39,17 +39,26 @@ let match_mot (a:afnd) (mot:string) =
     (* fin *)
     in
     (* Verifie que l'ensemble final est inclus dans T *)
-    fin <> [] && List.for_all (fun q -> List.mem q a.terminaux) fin
+    fin <> [] && List.exists (fun q -> List.mem q a.terminaux) fin
 
 
 let parse_regexp (s : string) : regexp =
     let stack = Stack.create () in
     let n = String.length s in
-    let point = ref ( Lettre (char_of_int 98)) in
+    let point = ref ( Lettre 'a') in
     (* a-z = 98-122 *)
-    for i = 99 to 105 do
+    for i = int_of_char 'b' to int_of_char 'z' do
         point := Ou(!point, Lettre (char_of_int i))
     done;
+    (* for i = int_of_char 'A' to int_of_char 'Z' do
+        point := Ou(!point, Lettre (char_of_int i))
+    done; *)
+    (* for i = int_of_char '0' to int_of_char '9' do
+        point := Ou(!point, Lettre (char_of_int i))
+    done; *)
+
+    (* let alphabet = "abcdefghijklmnopqrstuvwxyz" in
+    String.to_seq alphabet |> Seq.iter (fun c -> point := Ou(!point, Lettre c)); *)
 
     for i = 0 to n - 1 do
       let c = s.[i] in
@@ -263,16 +272,23 @@ let const_automate (exp:regexp) =
     let pre = calcul_prefixe e in
     let suf = calcul_suffixe e in
     let mot_vide_terminal = ref [] in
+    (* List.iter (function a,b -> Printf.printf "%d-%d " (int_of_char a) (int_of_char b)) fact; *)
     if contient_mot_vide exp then begin
         mot_vide_terminal := ['e'] end;
     let auto = {initiaux = ['e'];
                 terminaux = (!mot_vide_terminal)@suf;
                 delta = Hashtbl.create 1}
     in
-    List.iter (fun (q0,q1) -> let carac = e_lin.(int_of_char q1) in 
-        Hashtbl.replace auto.delta (q0,carac) q1) fact;
+    List.iter (fun (q0,q1) -> (
+        
+        (* Printf.printf "Ajout de la transition %d -> %d\n" (int_of_char q0) (int_of_char q1); *)
+        let carac = e_lin.(int_of_char q1) in 
+        (* Printf.printf "=> %d - %d -> %d\n" (int_of_char q0) (int_of_char carac) (int_of_char q1); *)
+        Hashtbl.add auto.delta (q0,carac) q1
+        
+    )) fact;
     List.iter (fun q -> let carac = e_lin.(int_of_char q) in
-        Hashtbl.replace auto.delta ('e',carac) q) pre;
+        Hashtbl.add auto.delta ('e',carac) q) pre;
     auto
 
     
@@ -302,8 +318,8 @@ let main () =
         let line = Stdlib.input_line input_buffer in
         if match_mot a line then
          (Printf.printf "[x] %s\n" line)
-          else 
-         (Printf.printf "[ ] %s\n" line)
+          else ()
+         (* (Printf.printf "[ ] %s\n" line) *)
       done
     with End_of_file -> ();
 
@@ -318,11 +334,11 @@ let dump_aut (a: afnd) =
     List.iter (fun q -> Printf.printf "%d [shape=doublecircle];" (int_of_char q)) a.terminaux;
     Seq.iter (function (q1,c), q2 -> Printf.printf "%d->%d[label=\"%c\"];\n" (int_of_char q1) (int_of_char q2) c) s;
     Printf.printf("}\n")
+(* 
+let r = parse_regexp (Parser.parse "a*a")
+let a = const_automate r ;; *)
 
-(* let r = parse_regexp (Parser.parse "(a|b)*a")
-let a = const_automate r;;
+(* match_mot a "to";; *)
 
-(* match_mot a "to" *)
-
-print_string (Parser.parse ".*a")
-dump_aut a *)
+(* print_string (Parser.parse ".*a") *)
+(* dump_aut a *)
