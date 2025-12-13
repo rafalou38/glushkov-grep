@@ -1,10 +1,3 @@
-type regexp =
-  | Vide
-  | Epsilon
-  | Lettre of char
-  | Ou of regexp * regexp
-  | Etoile of regexp
-  | Concat of regexp * regexp
 
 (* Q, Sigma, q0, T, Delta *)
 (* 
@@ -14,29 +7,41 @@ type regexp =
     T: liste
     Delta: etat, lettre -> etat
   *)
+type etat = int
+type unicode = int
+type regexp =
+  | Vide
+  | Epsilon
+  | Lettre of unicode
+  | Ou of regexp * regexp
+  | Etoile of regexp
+  | Concat of regexp * regexp
+
+let etat_initial = 0
+let point = 1
+
 type afnd = {
-  initiaux : char list;
-  terminaux : char list;
-  delta : (char * char, char) Hashtbl.t;
+  initiaux : etat list;
+  terminaux : etat list;
+  delta : (unicode * etat, unicode) Hashtbl.t;
 }
 
 (* qs liste d'états; c caractère -> lister d'états *)
-let delta_chap (a : afnd) (qs : char list) (c : char) =
+let delta_chap (a : afnd) (qs : etat list) (c : unicode) =
     List.fold_left (fun acc q -> 
-        let res = Hashtbl.find_all a.delta (q, c) in res@acc
-        (* match res with
-            | Some e -> e::acc
-            | None -> acc *)
+        let res1 = Hashtbl.find_all a.delta (q, c) in
+        let res2 = Hashtbl.find_all a.delta (q, point) in
+         res1@res2@acc
      ) [] qs
+        
 
-let rec delta_chap_et (a: afnd) (qs : char list) (m : char list) = 
+let rec delta_chap_et (a: afnd) (qs : etat list) (m : unicode list) = 
     match m with
         | []-> qs
         | c::l -> delta_chap_et a (delta_chap a qs c) l
 
 let match_mot (a:afnd) (mot:string) = 
-    let fin = delta_chap_et a a.initiaux (List.of_seq (String.to_seq mot))
-    (* fin *)
+    let fin = delta_chap_et a a.initiaux (List.of_seq (Seq.map int_of_char (String.to_seq mot)))
     in
     (* Verifie que l'ensemble final est inclus dans T *)
     fin <> [] && List.exists (fun q -> List.mem q a.terminaux) fin
@@ -45,11 +50,6 @@ let match_mot (a:afnd) (mot:string) =
 let parse_regexp (s : string) : regexp =
     let stack = Stack.create () in
     let n = String.length s in
-    let point = ref ( Lettre 'a') in
-    (* a-z = 98-122 *)
-    for i = int_of_char 'b' to int_of_char 'z' do
-        point := Ou(!point, Lettre (char_of_int i))
-    done;
     (* for i = int_of_char 'A' to int_of_char 'Z' do
         point := Ou(!point, Lettre (char_of_int i))
     done; *)
@@ -76,7 +76,7 @@ let parse_regexp (s : string) : regexp =
           match (ass, bss) with
           | Some a, Some b -> Stack.push (Concat (b, a)) stack
           | _ -> failwith "erreur dans la regex (@)")
-      | '.' -> (Stack.push !point stack)
+      | '.' -> (Stack.push (Lettre point) stack)
       | '*' -> (
           let ass = Stack.pop_opt stack in
           match ass with
@@ -84,15 +84,15 @@ let parse_regexp (s : string) : regexp =
           | _ -> failwith "erreur dans la regex (*)")
       | '&' -> Stack.push Epsilon stack
       | x ->
-          Stack.push (Lettre x) stack;
+          Stack.push (Lettre (int_of_char x)) stack;
           ()
     done;
     match Stack.pop_opt stack with Some regexp -> regexp | None -> Vide
 
-let r1 =
+(* let r1 =
     Ou
       ( Concat (Lettre 'a', Ou (Lettre 'b', Epsilon)),
-        Ou (Lettre 'd', Lettre 'e') )
+        Ou (Lettre 'd', Lettre 'e') ) *)
 
 let r2 = parse_regexp "ab&|de|@|"
 (* ((b|&)(d|e))|a *)
@@ -107,14 +107,14 @@ les associations qq part en memoire *)
 let linearise (regex : regexp) =
     let liste_lettres = ref [] in
     (* liste de couples indice lettre *)
-    (* On commence à 1 pour réserver 0 pour l'état initial *)
-    let i = ref 1 in
+    (* On commence à 2 pour réserver 0 pour l'état initial et 1 pour le . *)
+    let i = ref 2 in
     let rec aux r =
         match r with
         | Vide -> ()
         | Epsilon -> ()
         | Lettre x ->
-            liste_lettres := (char_of_int !i, x) :: !liste_lettres;
+            liste_lettres := (!i, x) :: !liste_lettres;
             incr i
         | Concat (a, b) ->
             aux a;
@@ -127,7 +127,7 @@ let linearise (regex : regexp) =
     aux regex;
     !liste_lettres
 
-let constr_lineaire (l : (char * char) list) (reg : regexp) =
+let constr_lineaire (l : (unicode * unicode) list) (reg : regexp) =
     let t = Array.of_list l in
     let i = ref 0 in
     let rec aux r =
@@ -263,17 +263,16 @@ let const_automate (exp:regexp) =
     let e_linearise = linearise exp in
     let n = List.length e_linearise in
     (* indices de 1 à n + EI *)
-    let e_lin = Array.make (n + 1) ' ' in
+    let e_lin = Array.make (n + 2) 2 in
     let rec liste_to_tab l = match l with
         |[] -> ()
-        |(ind,lettre)::suite -> e_lin.(int_of_char ind) <- lettre;
+        |(ind,lettre)::suite -> e_lin.(ind) <- lettre;
                                 liste_to_tab suite
     in liste_to_tab e_linearise; 
     let e = constr_lineaire e_linearise exp in
     let fact = calcul_facteurs e in
     let pre = calcul_prefixe e in
     let suf = calcul_suffixe e in
-    let etat_initial = '\000' in
     let mot_vide_terminal = ref [] in
     (* List.iter (function a,b -> Printf.printf "%d-%d " (int_of_char a) (int_of_char b)) fact; *)
     if contient_mot_vide exp then begin
@@ -283,14 +282,13 @@ let const_automate (exp:regexp) =
                 delta = Hashtbl.create 1}
     in
     List.iter (fun (q0,q1) -> (
-        
         (* Printf.printf "Ajout de la transition %d -> %d\n" (int_of_char q0) (int_of_char q1); *)
-        let carac = e_lin.(int_of_char q1) in 
+        let carac = e_lin.(q1) in 
         (* Printf.printf "=> %d - %d -> %d\n" (int_of_char q0) (int_of_char carac) (int_of_char q1); *)
         Hashtbl.add auto.delta (q0,carac) q1
         
     )) fact;
-    List.iter (fun q -> let carac = e_lin.(int_of_char q) in
+    List.iter (fun q -> let carac = e_lin.(q) in
         Hashtbl.add auto.delta (etat_initial,carac) q) pre;
     auto
 
@@ -310,19 +308,19 @@ let main () =
     let input_buffer =
         if argc = 3 then Stdlib.open_in Sys.argv.(2) else Stdlib.stdin
     in
+    let r = parse_regexp (Parser.parse regex_str) in
+    let a = const_automate r in
     Printf.printf "* Regexp you entered is '%s'\n* Reading from %s\n\n%!"
       regex_str
       (if argc = 3 then Sys.argv.(2) else "stdin");
 
-    let r = parse_regexp (Parser.parse regex_str) in
-    let a = const_automate r in
     try
       while true do
         let line = Stdlib.input_line input_buffer in
         if match_mot a line then
          (Printf.printf "[x] %s\n" line)
           else ()
-         (* (Printf.printf "[ ] %s\n" line) *)
+           (* (Printf.printf "[ ] %s\n" line) *)
       done
     with End_of_file -> ();
 
@@ -333,15 +331,7 @@ let () = main ()
 let dump_aut (a: afnd) = 
     let s = Hashtbl.to_seq a.delta in 
     Printf.printf("Digraph{\n");
-    List.iter (fun q -> Printf.printf "%d [shape=box];" (int_of_char q)) a.initiaux;
-    List.iter (fun q -> Printf.printf "%d [shape=doublecircle];" (int_of_char q)) a.terminaux;
-    Seq.iter (function (q1,c), q2 -> Printf.printf "%d->%d[label=\"%c\"];\n" (int_of_char q1) (int_of_char q2) c) s;
+    List.iter (fun q -> Printf.printf "%d [shape=box];" (q)) a.initiaux;
+    List.iter (fun q -> Printf.printf "%d [shape=doublecircle];" (q)) a.terminaux;
+    Seq.iter (function (q1,c), q2 -> Printf.printf "%d->%d[label=\"%d\"];\n" (q1) (q2) c) s;
     Printf.printf("}\n")
-(* 
-let r = parse_regexp (Parser.parse "a*a")
-let a = const_automate r ;; *)
-
-(* match_mot a "to";; *)
-
-(* print_string (Parser.parse ".*a") *)
-(* dump_aut a *)
