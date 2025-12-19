@@ -2,15 +2,31 @@
 
 ## Utilisation
 
+
+Pour compiler le code:
+```sh
+./build.sh
+```
+
+Pour le tester:
+```sh
+./grep "regex" ./tests/francais.txt
+```
+
+
+### run.sh
+Compile et execute le programme
 `q` Pour quitter less
 
 ```sh
-./run.sh regex ./test/file.txt
+./run.sh "regex" ./test/file.txt
 ```
 
-https://carnot.cpge.info/wp-content/uploads/2025/11/projet_glushkov.pdf
 
+## Pour afficher un graphe
 
+Avec uniquement un dump en sortie du programme.
+(utilise graphviz et imagemagick pour l'affichage)
 ```sh
 ./build.sh
 

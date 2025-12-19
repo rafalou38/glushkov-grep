@@ -1,16 +1,8 @@
-
-(* Ordre:
-    Syntaxe: 
-    - . = ''
-    - ? = |eps
-    - parentheses
-    
-    1. *
-    2. .
-    3. |
+(*
+Implémentation de l'algorithme de Shunting Yard
+Regex notation infixe -> Notation polonaise inverse
 
 *)
-
 type token =
   | CharToken of char
   | StarToken

@@ -1,4 +1,8 @@
 *.out
 *.cmi
 *.cmo
+*.cmx
+*.o
+*.dot
+*.png
 grep

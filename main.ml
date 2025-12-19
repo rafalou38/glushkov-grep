@@ -1,12 +1,3 @@
-
-(* Q, Sigma, q0, T, Delta *)
-(* 
-    Q - pas besoin
-    Sigma - pas besoin
-    q0: liste
-    T: liste
-    Delta: etat, lettre -> etat
-  *)
 type etat = int
 type unicode = int
 type regexp =
@@ -20,46 +11,49 @@ type regexp =
 let etat_initial = 0
 let point = 1
 
+(* 
+    Q - pas besoin
+    Sigma - pas besoin
+    q0: liste
+    T: liste
+    Delta: etat, lettre -> etat
+  *)
 type afnd = {
   initiaux : etat list;
   terminaux : etat list;
   delta : (unicode * etat, unicode) Hashtbl.t;
 }
 
-(* qs liste d'états; c caractère -> lister d'états *)
-let delta_chap (a : afnd) (qs : etat list) (c : unicode) =
+let rec union l1 l2 =
+    match l1 with
+    | [] -> l2
+    | hd :: tl -> if List.mem hd l2 then union tl l2 else hd :: union tl l2
+
+
+let delta_chap (a : afnd) (qs : etat list) (c : unicode): etat list =
     List.fold_left (fun acc q -> 
         let res1 = Hashtbl.find_all a.delta (q, c) in
         let res2 = Hashtbl.find_all a.delta (q, point) in
-         res1@res2@acc
+         (* res1@res2@acc *)
+         (union (union res1 res2) acc)
      ) [] qs
         
-
-let rec delta_chap_et (a: afnd) (qs : etat list) (m : unicode list) = 
+let rec delta_chap_et (a: afnd) (qs : etat list) (m : unicode list): etat list = 
     match m with
         | []-> qs
         | c::l -> delta_chap_et a (delta_chap a qs c) l
 
-let match_mot (a:afnd) (mot:string) = 
+let match_mot (a:afnd) (mot:string): bool = 
     let fin = delta_chap_et a a.initiaux (List.of_seq (Seq.map int_of_char (String.to_seq mot)))
     in
     (* Verifie que l'ensemble final est inclus dans T *)
     fin <> [] && List.exists (fun q -> List.mem q a.terminaux) fin
 
 
+(* Parse en écriture polonaise inverse *)
 let parse_regexp (s : string) : regexp =
     let stack = Stack.create () in
     let n = String.length s in
-    (* for i = int_of_char 'A' to int_of_char 'Z' do
-        point := Ou(!point, Lettre (char_of_int i))
-    done; *)
-    (* for i = int_of_char '0' to int_of_char '9' do
-        point := Ou(!point, Lettre (char_of_int i))
-    done; *)
-
-    (* let alphabet = "abcdefghijklmnopqrstuvwxyz" in
-    String.to_seq alphabet |> Seq.iter (fun c -> point := Ou(!point, Lettre c)); *)
-
     for i = 0 to n - 1 do
       let c = s.[i] in
 
@@ -89,24 +83,13 @@ let parse_regexp (s : string) : regexp =
     done;
     match Stack.pop_opt stack with Some regexp -> regexp | None -> Vide
 
-(* let r1 =
-    Ou
-      ( Concat (Lettre 'a', Ou (Lettre 'b', Epsilon)),
-        Ou (Lettre 'd', Lettre 'e') ) *)
-
-let r2 = parse_regexp "ab&|de|@|"
-(* ((b|&)(d|e))|a *)
-
-(* ab*|ca* *)
-
 let r3 = parse_regexp "ab*@ca*@|"
 let r4 = parse_regexp (Parser.parse "ab*|ca*")
-(*fct de transition de l'automate *)
-(*fct qui linéarise l'expression, il faudra garder 
-les associations qq part en memoire *)
-let linearise (regex : regexp) =
+
+
+(* Renvoie une liste de couples pour linéariser un automate *)
+let linearise (regex : regexp): (unicode * unicode) list =
     let liste_lettres = ref [] in
-    (* liste de couples indice lettre *)
     (* On commence à 2 pour réserver 0 pour l'état initial et 1 pour le . *)
     let i = ref 2 in
     let rec aux r =
@@ -127,6 +110,7 @@ let linearise (regex : regexp) =
     aux regex;
     !liste_lettres
 
+(* Construit la regex linéarisée a partir de la liste des substitutions *)
 let constr_lineaire (l : (unicode * unicode) list) (reg : regexp) =
     let t = Array.of_list l in
     let i = ref 0 in
@@ -144,6 +128,7 @@ let constr_lineaire (l : (unicode * unicode) list) (reg : regexp) =
     in
     aux reg
 
+(* Détermine si une regexp est équivalente au mot vide *)
 let rec est_vide exp =
     match exp with
     | Vide -> true
@@ -162,11 +147,7 @@ let rec contient_mot_vide exp =
     | Ou (a, b) -> contient_mot_vide a || contient_mot_vide b
     | Concat (a, b) -> contient_mot_vide a && contient_mot_vide b
 
-let rec union l1 l2 =
-    match l1 with
-    | [] -> l2
-    | hd :: tl -> if List.mem hd l2 then union tl l2 else hd :: union tl l2
-
+(* Pas utilisée finalement (contient mot vide utilisée a la place) *)
 let rec simplify expr =
     match expr with
     | Vide -> expr
@@ -222,7 +203,6 @@ let calcul_suffixe (exp : regexp) =
               aux a;
               aux b)
             else aux b
-        (* Si b=& ou si b = Etoile alors aux a *)
     in
     aux exp;
     !suff
@@ -259,10 +239,14 @@ let calcul_facteurs (exp : regexp) =
     aux exp;
     !fact
 
+
+(* Construit un automate linéarisé a partir d'une regex non linéaire *)
 let const_automate (exp:regexp) = 
     let e_linearise = linearise exp in
     let n = List.length e_linearise in
-    (* indices de 1 à n + EI *)
+    (* indices de 2 à n (0=EI 1=.) *)
+
+    (* Conversion de la liste de couples en tableau pour accès direct *)
     let e_lin = Array.make (n + 2) 2 in
     let rec liste_to_tab l = match l with
         |[] -> ()
@@ -274,7 +258,6 @@ let const_automate (exp:regexp) =
     let pre = calcul_prefixe e in
     let suf = calcul_suffixe e in
     let mot_vide_terminal = ref [] in
-    (* List.iter (function a,b -> Printf.printf "%d-%d " (int_of_char a) (int_of_char b)) fact; *)
     if contient_mot_vide exp then begin
         mot_vide_terminal := [etat_initial] end;
     let auto = {initiaux = [etat_initial];
@@ -282,9 +265,7 @@ let const_automate (exp:regexp) =
                 delta = Hashtbl.create 1}
     in
     List.iter (fun (q0,q1) -> (
-        (* Printf.printf "Ajout de la transition %d -> %d\n" (int_of_char q0) (int_of_char q1); *)
         let carac = e_lin.(q1) in 
-        (* Printf.printf "=> %d - %d -> %d\n" (int_of_char q0) (int_of_char carac) (int_of_char q1); *)
         Hashtbl.add auto.delta (q0,carac) q1
         
     )) fact;
@@ -320,7 +301,6 @@ let main () =
         if match_mot a line then
          (Printf.printf "[x] %s\n" line)
           else ()
-           (* (Printf.printf "[ ] %s\n" line) *)
       done
     with End_of_file -> ();
 
